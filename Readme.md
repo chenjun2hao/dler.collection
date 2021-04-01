@@ -6,3 +6,4 @@
 1. [注意力模块SE，CBAM，CA的比较](./1_SE,CBAM,CA/readme.md)
 2. [pytorch自带Ln规则剪枝测试]()
 3. [通过cmake引入宏定义](./3_cmake/readme.md)
+4. [ARM Neon rgb split](./4_ARM/1_rgb_split/readme.md)
