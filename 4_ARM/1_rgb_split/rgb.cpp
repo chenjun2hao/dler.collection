@@ -20,6 +20,7 @@ void rgb_deinterleave_neon(uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *rgb, int
     }
 }
 
+
 void neon_rgb_split(Mat src){
 	int size = src.rows * src.cols;
 	uint8_t *r, *g, *b;
@@ -31,8 +32,8 @@ void neon_rgb_split(Mat src){
 	auto start = chrono::system_clock::now();
 	rgb_deinterleave_neon(r, g, b, rgb, size);
 	auto end   = chrono::system_clock::now();
-	auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
-    cout << "neon cost time is:" << double(duration.count()) << "ms" << endl;
+	auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
+    cout << "neon cost time is:" << double(duration.count()) << " us" << endl;
 
 	// Mat b_color(src.rows, src.cols, CV_8UC3);
 	// Mat g_color(src.rows, src.cols, CV_8UC3);
@@ -55,9 +56,71 @@ void neon_rgb_split(Mat src){
 	// imwrite("b_neon.jpg", b_color);
 	// imwrite("g_neon.jpg", g_color);
 	// imwrite("r_neon.jpg", r_color);
-	// free(r);
-	// free(g);
-	// free(b);
+	free(r);
+	free(g);
+	free(b);
+}
+
+void rgb_assembly_neon(uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *rgb, int len_color) {
+
+    asm volatile(
+        "1:                                             \n"		// goto 标志位
+		"prfm   pldl1keep, [%3, 384]    				\n"
+        "ld3    {v0.16b, v1.16b, v2.16b}, [%3], #48     \n"
+        "subs   %w4, %w4, #16           \n"
+        "st1    {v0.16b}, [%2], #16     \n"     // b
+        "st1    {v1.16b}, [%1], #16     \n"     // g
+        "st1    {v2.16b}, [%0], #16     \n"     // r
+        "b.gt   1b                      \n"
+        : "+r"(r),
+          "+r"(g),
+          "+r"(b),
+          "+r"(rgb),
+          "+r"(len_color)
+        :
+        : "v0", "v1", "v2"          // use 3 个128bit寄存器
+    );
+}
+
+
+void assembly_rgb_split(Mat src){
+	int size = src.rows * src.cols;
+	uint8_t *r, *g, *b;
+	uint8_t *rgb = src.data;
+	r = (uint8_t*)malloc(sizeof(uint8_t) * size);
+	g = (uint8_t*)malloc(sizeof(uint8_t) * size);
+	b = (uint8_t*)malloc(sizeof(uint8_t) * size);
+
+	auto start = chrono::system_clock::now();
+	rgb_assembly_neon(r, g, b, rgb, size);
+	auto end   = chrono::system_clock::now();
+	auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
+    cout << "assembly cost time is:" << double(duration.count()) << " us" << endl;
+
+	// Mat b_color(src.rows, src.cols, CV_8UC3);
+	// Mat g_color(src.rows, src.cols, CV_8UC3);
+	// Mat r_color(src.rows, src.cols, CV_8UC3);
+	// size *=3;
+	// for(int i=0; i<size; i+=3)
+	// {
+	// 	b_color.data[i] = b[i/3];
+	// 	b_color.data[i+1] = 0;
+	// 	b_color.data[i+2] = 0;
+		
+	// 	g_color.data[i] = 0;
+	// 	g_color.data[i+1] = g[i/3];
+	// 	g_color.data[i+2] = 0;
+		
+	// 	r_color.data[i] = 0;
+	// 	r_color.data[i+1] = 0;
+	// 	r_color.data[i+2] = r[i/3];
+	// }
+	// imwrite("b_asm.jpg", b_color);
+	// imwrite("g_asm.jpg", g_color);
+	// imwrite("r_asm.jpg", r_color);
+	free(r);
+	free(g);
+	free(b);
 }
 
 
@@ -72,8 +135,8 @@ void opencv_rgb_split(Mat src)
 	Mat out[] = {b, g, r};
 	split(src, out);
 	auto end   = chrono::system_clock::now();
-	auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
-    cout << "opencv cost time is:" << double(duration.count()) << "ms" << endl;
+	auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
+    cout << "opencv cost time is:" << double(duration.count()) << " us" << endl;
 	
 	// Mat b_color(src.rows, src.cols, CV_8UC3);
 	// Mat g_color(src.rows, src.cols, CV_8UC3);
@@ -117,8 +180,8 @@ void own_rgb_split(Mat src){
 	auto start = chrono::system_clock::now();
 	own_split_kernel(r, g, b, rgb, size);
 	auto end   = chrono::system_clock::now();
-	auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
-    cout << "own cost time is:" << double(duration.count()) << "ms" << endl;
+	auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
+    cout << "own cost time is:" << double(duration.count()) << " us" << endl;
 
 	// Mat b_color(src.rows, src.cols, CV_8UC3);
 	// Mat g_color(src.rows, src.cols, CV_8UC3);
@@ -141,9 +204,9 @@ void own_rgb_split(Mat src){
 	// imwrite("b_own.jpg", b_color);
 	// imwrite("g_own.jpg", g_color);
 	// imwrite("r_own.jpg", r_color);
-	// free(r);
-	// free(g);
-	// free(b);
+	free(r);
+	free(g);
+	free(b);
 }
 
 
@@ -152,8 +215,11 @@ int main(int argc, char** argv){
 
 	neon_rgb_split(img);
 
+	assembly_rgb_split(img);
+
 	opencv_rgb_split(img);
 
 	own_rgb_split(img);
+
     return 0;
 }
